@@ -1,1 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simulador MIC-1</title>
+</head>
+<body>
+    <h1>Simulador MIC-1</h1>
+    
+    <table width="100%" height="100vh">
+        <tr>
+            <td width="50%" valign="top">
+                <h2>Programa</h2>
+                <textarea id="programa" rows="8" cols="50" placeholder="Digite o programa aqui...">LOCO 5
+STOD 30
+LOCO 3
+STOD 31
+LODD 30
+ADDD 31
+STOD 32
+JPOS 10
+JUMP 14
+LODD 32
+PUSH
+ADDD 32
+STOD 33
+PSHI 99
+POPI 34
+HALT</textarea>
+                <br><br>
+                
+                <button onclick="carregarPrograma()">Carregar Programa</button>
+                <button onclick="executarPasso()">Executar Passo</button>
+                <button onclick="executarTudo()">Executar Tudo</button>
+                <button onclick="resetar()">Resetar</button>
+                <br><br>
+                
+                <h2>Registradores</h2>
+                <table border="1">
+                    <tr>
+                        <td>PC (Program Counter):</td>
+                        <td id="pc">0</td>
+                    </tr>
+                    <tr>
+                        <td>AC (Accumulator):</td>
+                        <td id="ac">0</td>
+                    </tr>
+                    <tr>
+                        <td>SP (Stack Pointer):</td>
+                        <td id="sp">2047</td>
+                    </tr>
+                    <tr>
+                        <td>IR (Instruction Register):</td>
+                        <td id="ir">0</td>
+                    </tr>
+                </table>
+                <br>
+                
+                <h2>Console</h2>
+                <textarea id="console" rows="10" cols="55" readonly></textarea>
+            </td>
+            <td width="50%" valign="top">
+                <h2>Instruções Disponíveis</h2>
+                <ul>
+                    <li>LODD addr - Carrega valor do endereço para AC</li>
+                    <li>STOD addr - Armazena AC no endereço</li>
+                    <li>LOCO const - Carrega constante para AC</li>
+                    <li>ADDD addr - Soma valor do endereço com AC</li>
+                    <li>SUBD addr - Subtrai valor do endereço de AC</li>
+                    <li>JUMP addr - Pula para endereço</li>
+                    <li>JZER addr - Pula se AC = 0</li>
+                    <li>JPOS addr - Pula se AC > 0</li>
+                    <li>JNEG addr - Pula se AC < 0</li>
+                    <li>CALL addr - Chama subrotina</li>
+                    <li>RETN - Retorna de subrotina</li>
+                    <li>PUSH - Empilha AC</li>
+                    <li>POP - Desempilha para AC</li>
+                    <li>PSHI const - Empilha constante</li>
+                    <li>POPI addr - Desempilha para endereço</li>
+                    <li>HALT - Para execução</li>
+                </ul>
+                <br>
+                
+                <h2>Memória</h2>
+                <div style="height: 300px; overflow-y: scroll; border: 2px solid black;">
+                    <table border="1" width="100%">
+                        <tr>
+                            <th>Endereço</th>
+                            <th>Valor</th>
+                            <th>Decimal</th>
+                        </tr>
+                        <tbody id="memoria">
+                        </tbody>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 
+    <script>
+        class SimuladorMIC1 {
+            constructor() {
+                this.memoria = new Array(2048).fill(0);
+                this.registradores = {
+                    PC: 0,
+                    AC: 0,
+                    SP: 2047,
+                    IR: 0
+                };
+                this.instrucoes = {
+                    'LODD': 0, 'STOD': 1, 'LOCO': 2, 'ADDD': 3, 'SUBD': 4,
+                    'JUMP': 5, 'JZER': 6, 'JPOS': 7, 'CALL': 8, 'RETN': 9,
+                    'PUSH': 10, 'POP': 11, 'PSHI': 12, 'JNEG': 13, 'POPI': 14
+                };
+                this.programa = [];
+                this.executando = false;
+            }
+            
+            carregarPrograma(texto) {
+                const linhas = texto.split('\n');
+                this.programa = [];
+                let endereco = 0;
+                
+                for (let linha of linhas) {
+                    linha = linha.trim().toUpperCase();
+                    if (linha === '' || linha.startsWith('//')) continue;
+                    
+                    if (linha === 'HALT') {
+                        this.memoria[endereco] = 0xFFFF;
+                    } else {
+                        const partes = linha.split(' ');
+                        const instrucao = partes[0];
+                        const operando = partes.length > 1 ? parseInt(partes[1]) : 0;
+                        
+                        if (this.instrucoes.hasOwnProperty(instrucao)) {
+                            const opcode = this.instrucoes[instrucao];
+                            this.memoria[endereco] = (opcode << 8) | operando;
+                        }
+                    }
+                    endereco++;
+                }
+                
+                this.log('Programa carregado com ' + endereco + ' instruções');
+                this.atualizarInterface();
+            }
+            
+            executarPasso() {
+                if (this.registradores.PC >= 2048) {
+                    this.log('Fim da memória alcançado');
+                    return false;
+                }
+                
+                const instrucao = this.memoria[this.registradores.PC];
+                this.registradores.IR = instrucao;
+                
+                if (instrucao === 0xFFFF) {
+                    this.log('HALT - Execução parada');
+                    return false;
+                }
+                
+                const opcode = (instrucao >> 8) & 0xFF;
+                const operando = instrucao & 0xFF;
+                
+                this.registradores.PC++;
+                
+                switch (opcode) {
+                    case 0: // LODD
+                        this.registradores.AC = this.memoria[operando];
+                        this.log('LODD ' + operando + ' -> AC = ' + this.registradores.AC);
+                        break;
+                    case 1: // STOD
+                        this.memoria[operando] = this.registradores.AC;
+                        this.log('STOD ' + operando + ' <- AC = ' + this.registradores.AC);
+                        break;
+                    case 2: // LOCO
+                        this.registradores.AC = operando;
+                        this.log('LOCO ' + operando + ' -> AC = ' + this.registradores.AC);
+                        break;
+                    case 3: // ADDD
+                        this.registradores.AC += this.memoria[operando];
+                        this.log('ADDD ' + operando + ' -> AC = ' + this.registradores.AC);
+                        break;
+                    case 4: // SUBD
+                        this.registradores.AC -= this.memoria[operando];
+                        this.log('SUBD ' + operando + ' -> AC = ' + this.registradores.AC);
+                        break;
+                    case 5: // JUMP
+                        this.registradores.PC = operando;
+                        this.log('JUMP ' + operando);
+                        break;
+                    case 6: // JZER
+                        if (this.registradores.AC === 0) {
+                            this.registradores.PC = operando;
+                            this.log('JZER ' + operando + ' (saltou)');
+                        } else {
+                            this.log('JZER ' + operando + ' (não saltou)');
+                        }
+                        break;
+                    case 7: // JPOS
+                        if ((this.registradores.AC & 0x8000) === 0 && this.registradores.AC !== 0) {
+                            this.registradores.PC = operando;
+                            this.log('JPOS ' + operando + ' (saltou)');
+                        } else {
+                            this.log('JPOS ' + operando + ' (não saltou)');
+                        }
+                        break;
+                    case 8: // CALL
+                        this.registradores.SP--;
+                        this.memoria[this.registradores.SP] = this.registradores.PC;
+                        this.registradores.PC = operando;
+                        this.log('CALL ' + operando);
+                        break;
+                    case 9: // RETN
+                        this.registradores.PC = this.memoria[this.registradores.SP];
+                        this.registradores.SP++;
+                        this.log('RETN');
+                        break;
+                    case 10: // PUSH
+                        if (this.registradores.SP <= 0) {
+                            this.log('ERRO: Stack overflow - SP = ' + this.registradores.SP);
+                            return false;
+                        }
+                        this.registradores.SP--;
+                        this.memoria[this.registradores.SP] = this.registradores.AC;
+                        this.log('PUSH AC = ' + this.registradores.AC);
+                        break;
+                    case 11: // POP
+                        if (this.registradores.SP >= 2048) {
+                            this.log('ERRO: Stack underflow - SP = ' + this.registradores.SP);
+                            return false;
+                        }
+                        this.registradores.AC = this.memoria[this.registradores.SP] || 0;
+                        this.registradores.SP++;
+                        this.log('POP -> AC = ' + this.registradores.AC);
+                        break;
+                    case 12: // PSHI
+                        if (this.registradores.SP <= 0) {
+                            this.log('ERRO: Stack overflow - SP = ' + this.registradores.SP);
+                            return false;
+                        }
+                        this.registradores.SP--;
+                        this.memoria[this.registradores.SP] = operando;
+                        this.log('PSHI ' + operando + ' -> empilhou ' + operando);
+                        break;
+                    case 13: // JNEG
+                        if ((this.registradores.AC & 0x8000) !== 0) {
+                            this.registradores.PC = operando;
+                            this.log('JNEG ' + operando + ' (saltou)');
+                        } else {
+                            this.log('JNEG ' + operando + ' (não saltou)');
+                        }
+                        break;
+                    case 14: // POPI
+                        if (this.registradores.SP >= 2048) {
+                            this.log('ERRO: Stack underflow - SP = ' + this.registradores.SP);
+                            return false;
+                        }
+                        this.memoria[operando] = this.memoria[this.registradores.SP] || 0;
+                        this.registradores.SP++;
+                        this.log('POPI ' + operando + ' -> desempilhou para endereço ' + operando);
+                        break;
+                    default:
+                        this.log('Instrução inválida: ' + opcode);
+                        return false;
+                }
+                
+                this.atualizarInterface();
+                return true;
+            }
+            
+            resetar() {
+                this.memoria.fill(0);
+                this.registradores = { PC: 0, AC: 0, SP: 2047, IR: 0 };
+                this.executando = false;
+                document.getElementById('console').value = '';
+                this.atualizarInterface();
+                this.log('Simulador resetado');
+            }
+            
+            log(mensagem) {
+                const console = document.getElementById('console');
+                console.value += mensagem + '\n';
+                console.scrollTop = console.scrollHeight;
+            }
+            
+            atualizarInterface() {
+                document.getElementById('pc').textContent = this.registradores.PC;
+                document.getElementById('ac').textContent = this.registradores.AC;
+                document.getElementById('sp').textContent = this.registradores.SP;
+                document.getElementById('ir').textContent = '0x' + this.registradores.IR.toString(16).toUpperCase();
+                
+                this.atualizarMemoria();
+            }
+            
+            atualizarMemoria() {
+                const tbody = document.getElementById('memoria');
+                tbody.innerHTML = '';
+                
+                try {
+                    // Mostra todos os 2048 endereços
+                    for (let i = 0; i < 2048; i++) {
+                        const tr = document.createElement('tr');
+                        const valor = this.memoria[i] || 0; // Garante que o valor seja pelo menos 0
+                        const valorDecimal = valor;
+                        
+                        // Destaca a linha do PC atual
+                        if (i === this.registradores.PC) {
+                            tr.style.backgroundColor = 'yellow';
+                        }
+                        
+                        tr.innerHTML = `
+                            <td>${i}</td>
+                            <td>0x${valor.toString(16).padStart(4, '0').toUpperCase()}</td>
+                            <td>${valorDecimal}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar memória:', error);
+                    this.log('Erro na atualização da memória: ' + error.message);
+                }
+            }
+            
+            decodificarInstrucao(valor) {
+                if (valor === 0xFFFF) return 'HALT';
+                if (valor === 0) return '';
+                
+                const opcode = (valor >> 8) & 0xFF;
+                const operando = valor & 0xFF;
+                const nomes = ['LODD', 'STOD', 'LOCO', 'ADDD', 'SUBD', 'JUMP', 'JZER', 'JPOS', 'CALL', 'RETN', 'PUSH', 'POP', 'PSHI', 'JNEG', 'POPI'];
+                
+                if (opcode < nomes.length) {
+                    return nomes[opcode] + ' ' + operando;
+                }
+                return 'INV';
+            }
+        }
+        
+        const sim = new SimuladorMIC1();
+        
+        function carregarPrograma() {
+            const texto = document.getElementById('programa').value;
+            sim.carregarPrograma(texto);
+        }
+        
+        function executarPasso() {
+            sim.executarPasso();
+        }
+        
+        function executarTudo() {
+            let contador = 0;
+            while (sim.executarPasso() && contador < 1000) {
+                contador++;
+            }
+            if (contador >= 1000) {
+                sim.log('Limite de execução atingido (possível loop infinito)');
+            }
+        }
+        
+        function resetar() {
+            sim.resetar();
+        }
+        
+        // Inicializar interface
+        sim.atualizarInterface();
+    </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+LOCO 5
+STOD 30
+LOCO 3
+STOD 31
+LODD 30
+ADDD 31
+STOD 32
+JPOS 10
+JUMP 14
+LODD 32
+PUSH
+ADDD 32
+STOD 33
+PSHI 99
+POPI 34
+HALT
+
+
+/* Decrementa AC e coloca no enderço 19 enquando AC é positivo.
+LOCO 1
+STOD 20
+LOCO 6
+SUBD 20
+STOD 19
+JPOS 3
+HALT
+
+/* Soma dois valores usando pilha.
+
+LOCO 3
+STOD 40
+LOCO 5
+STOD 41
+LODD 40
+PUSH
+LODD 41
+PUSH
+POP
+STOD 43
+POP
+ADDD 43
+STOD 42
+HALT
